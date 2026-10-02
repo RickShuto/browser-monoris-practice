@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Monolith Browser Version</title>
+<style>
+  body { font-family: sans-serif; }
+  table { border-collapse: collapse; }
+  td {
+    width: 28px;
+    height: 28px;
+    text-align: center;
+    font-weight: bold;
+    border: 1px solid #aaa;
+    user-select: none;
+  }
+  .color1 { background: white; }
+  .color2 { background: pink; }
+  .color3 { background: yellow; }
+  .color4 { background: lightblue; }
+  .empty { background: gray; }
+  .label { background: #ddd; }
+</style>
+</head>
+<body>
+
+<h2>発掘！モノリス ブラウザ版</h2>
+
+<button onclick="resetBoard()">初期状態に戻す</button>
+<button onclick="undo()">Undo（1手戻す）</button>
+<button onclick="randomBoard()">新しい盤面でプレイ</button>
+
+<table id="board"></table>
+
+<script>
+const H = 11;
+const W = 22;
+const COLOR_CYCLE = [1,2,3,4];
+
+let initialBoard = [
+  [4,1,2,2,1,4,2,2,4,3,1,1,3,3,1,4,4,4,1,3,1,4],
+  [1,3,2,4,4,1,4,3,1,3,4,3,4,3,4,1,4,3,2,4,3,1],
+  [4,1,4,3,3,3,1,1,3,4,2,2,2,2,3,1,1,2,3,2,4,3],
+  [2,1,3,2,4,2,3,2,2,2,4,1,1,2,4,2,1,1,2,3,2,2],
+  [2,1,4,4,4,4,3,4,4,2,4,4,3,4,2,4,3,4,3,3,3,4],
+  [4,3,2,1,3,4,2,3,4,3,3,1,4,2,4,3,1,2,2,1,4,1],
+  [3,3,4,3,3,2,1,2,1,2,3,2,3,1,2,1,4,4,3,3,3,2],
+  [2,2,1,1,1,1,2,1,3,1,1,2,2,1,3,1,2,1,1,2,2,1],
+  [3,4,1,1,4,4,3,2,3,4,4,3,2,3,4,4,4,2,4,1,4,4],
+  [2,2,4,2,4,2,3,1,2,3,1,2,4,2,3,3,3,1,3,1,3,2],
+  [1,4,3,3,3,1,2,1,2,1,1,4,1,1,2,1,2,3,2,4,1,2]
+];
+
+let board = JSON.parse(JSON.stringify(initialBoard));
+let history = [];
+
+function nextColor(c){
+  if(c === -1) return -1;
+  let idx = COLOR_CYCLE.indexOf(c);
+  return COLOR_CYCLE[(idx+1)%4];
+}
+
+function findGroup(sy, sx){
+  let color = board[sy][sx];
+  if(color === -1) return [];
+
+  let visited = new Set();
+  let q = [[sy,sx]];
+  visited.add(`${sy},${sx}`);
+
+  while(q.length){
+    let [y,x] = q.shift();
+    for(let [dy,dx] of [[1,0],[-1,0],[0,1],[0,-1]]){
+      let ny = y+dy, nx = x+dx;
+      if(ny>=0 && ny<H && nx>=0 && nx<W){
+        if(board[ny][nx] === color && !visited.has(`${ny},${nx}`)){
+          visited.add(`${ny},${nx}`);
+          q.push([ny,nx]);
+        }
+      }
+    }
+  }
+
+  return [...visited].map(s => s.split(",").map(Number));
+}
+
+function applyMove(group){
+  for(let [y,x] of group){
+    board[y][x] = -1;
+  }
+
+  let adj = new Set();
+  for(let [y,x] of group){
+    for(let [dy,dx] of [[1,0],[-1,0],[0,1],[0,-1]]){
+      let ny = y+dy, nx = x+dx;
+      if(ny>=0 && ny<H && nx>=0 && nx<W){
+        if(board[ny][nx] !== -1){
+          adj.add(`${ny},${nx}`);
+        }
+      }
+    }
+  }
+
+  for(let s of adj){
+    let [y,x] = s.split(",").map(Number);
+    board[y][x] = nextColor(board[y][x]);
+  }
+}
+
+function drawBoard(){
+  let tbl = document.getElementById("board");
+  tbl.innerHTML = "";
+
+  // 列ラベル
+  let header = document.createElement("tr");
+  let blank = document.createElement("td");
+  blank.className = "label";
+  header.appendChild(blank);
+
+  for(let x=0; x<W; x++){
+    let th = document.createElement("td");
+    th.className = "label";
+    th.textContent = x+1;
+    header.appendChild(th);
+  }
+  tbl.appendChild(header);
+
+  // 本体
+  for(let y=0; y<H; y++){
+    let tr = document.createElement("tr");
+
+    // 行ラベル
+    let rl = document.createElement("td");
+    rl.className = "label";
+    rl.textContent = String.fromCharCode(65+y);
+    tr.appendChild(rl);
+
+    for(let x=0; x<W; x++){
+      let c = board[y][x];
+      let td = document.createElement("td");
+      td.className = (c===-1 ? "empty" : "color"+c);
+      td.textContent = c===-1 ? "" : c;
+
+      td.onclick = () => {
+        let g = findGroup(y,x);
+        if(g.length >= 2){
+          history.push(JSON.parse(JSON.stringify(board)));
+          applyMove(g);
+          drawBoard();
+        }
+      };
+
+      tr.appendChild(td);
+    }
+    tbl.appendChild(tr);
+  }
+}
+
+function undo(){
+  if(history.length){
+    board = history.pop();
+    drawBoard();
+  }
+}
+
+function resetBoard(){
+  board = JSON.parse(JSON.stringify(initialBoard));
+  history = [];
+  drawBoard();
+}
+
+function randomBoard(){
+  history = [];
+  board = [];
+  for(let y=0; y<H; y++){
+    let row = [];
+    for(let x=0; x<W; x++){
+      row.push(Math.floor(Math.random()*4)+1);
+    }
+    board.push(row);
+  }
+  initialBoard = JSON.parse(JSON.stringify(board));
+  drawBoard();
+}
+
+drawBoard();
+</script>
+
+</body>
+</html>
