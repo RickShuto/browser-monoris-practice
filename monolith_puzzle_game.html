@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>発掘！モノリス 11×22 パズル</title>
+    <!-- Tailwind CSS for modern styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom styles and smooth animations */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .cell-transition {
+            transition: all 0.15s ease-in-out;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col items-center justify-between p-4 md:p-6 select-none">
+
+    <header class="w-full max-w-7xl text-center mb-4">
+        <h1 class="text-3xl md:text-4xl font-extrabold tracking-tight bg-gradient-to-r from-teal-400 to-indigo-400 bg-clip-text text-transparent">
+            発掘！モノリス (11×22)
+        </h1>
+        <p class="text-sm text-slate-400 mt-1">同じ色のつながったセルをクリックして消去しよう！隣接するセルが変化します。</p>
+    </header>
+
+    <main id="app-container" class="w-full max-w-7xl flex flex-col items-center justify-center flex-grow">
+        
+        <!-- Startup Screen -->
+        <div id="startup-screen" class="bg-slate-800 border border-slate-700 p-8 rounded-2xl shadow-2xl max-w-xl w-full text-center space-y-6">
+            <h2 class="text-2xl font-bold text-slate-200">ゲームモードの選択</h2>
+            <p class="text-slate-400 text-sm">11行 × 22列のパズルボードを作成する方法を選んでください。</p>
+            
+            <div class="flex flex-col sm:flex-row gap-4 justify-center">
+                <button onclick="startGameRandom()" class="px-6 py-3 bg-teal-600 hover:bg-teal-500 text-white font-semibold rounded-xl shadow-lg transition transform hover:-translate-y-0.5">
+                    🎲 ランダム生成
+                </button>
+                <button onclick="showCustomInput()" class="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl shadow-lg transition transform hover:-translate-y-0.5">
+                    ⌨️ 手動入力
+                </button>
+            </div>
+
+            <!-- Custom Input Panel (Hidden by default) -->
+            <div id="custom-input-panel" class="hidden text-left space-y-3 mt-4 pt-4 border-t border-slate-700">
+                <label class="block text-sm font-medium text-slate-300">
+                    11行 × 22列の文字列を入力 (1〜4のみ):
+                </label>
+                <p class="text-xs text-slate-400">1行につき22文字の数字（例: 12341234...）を11行分、改行区切りで入力してください。</p>
+                <textarea id="custom-board-text" rows="11" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-xs font-mono text-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none resize-none" placeholder="12341234..."></textarea>
+                <div id="input-error" class="text-rose-400 text-xs hidden"></div>
+                <button onclick="startGameCustom()" class="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-xl transition">
+                    この盤面でスタート
+                </button>
+            </div>
+        </div>
+
+        <!-- Game Play Screen (Hidden by default) -->
+        <div id="game-screen" class="hidden flex flex-col items-center w-full space-y-4">
+            
+            <!-- Controls & Stats Toolbar -->
+            <div class="flex flex-wrap items-center justify-between w-full max-w-6xl bg-slate-800/80 backdrop-blur border border-slate-700/60 p-4 rounded-2xl gap-4 shadow-xl">
+                <div class="flex items-center space-x-3">
+                    <button onclick="undoMove()" id="btn-undo" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 disabled:opacity-40 disabled:cursor-not-allowed text-slate-200 font-medium text-sm rounded-lg transition">
+                        ↩️ Undo（1手戻す）
+                    </button>
+                    <button onclick="resetBoard()" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 font-medium text-sm rounded-lg transition">
+                        🔄 初期状態に戻す
+                    </button>
+                    <button onclick="returnToMenu()" class="px-4 py-2 bg-rose-900/60 hover:bg-rose-900 text-rose-200 font-medium text-sm rounded-lg transition">
+                        🏠 メニューへ戻る
+                    </button>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <span id="move-counter" class="text-sm font-semibold text-slate-300">手数: 0</span>
+                    <button onclick="toggleLogModal()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-sm rounded-lg transition">
+                        📜 ログ表示
+                    </button>
+                </div>
+            </div>
+
+            <!-- Board Grid Wrapper with horizontal scroll for responsiveness -->
+            <div class="w-full overflow-x-auto pb-4 max-w-full flex justify-center">
+                <div id="board-grid-container" class="inline-block bg-slate-800 p-4 rounded-2xl shadow-2xl border border-slate-700">
+                    <!-- Grid dynamically generated -->
+                </div>
+            </div>
+
+        </div>
+
+    </main>
+
+    <!-- Log Modal -->
+    <div id="log-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50">
+        <div class="bg-slate-800 border border-slate-700 rounded-2xl max-w-md w-full p-6 shadow-2xl flex flex-col max-h-[80vh]">
+            <div class="flex justify-between items-center mb-4 pb-2 border-b border-slate-700">
+                <h3 class="text-lg font-bold text-slate-200">消去履歴ログ</h3>
+                <button onclick="toggleLogModal()" class="text-slate-400 hover:text-slate-200 text-xl font-bold">&times;</button>
+            </div>
+            <div id="log-content" class="overflow-y-auto flex-grow space-y-2 text-xs font-mono text-slate-300 pr-2">
+                <!-- Log entries -->
+            </div>
+            <div class="mt-4 pt-3 border-t border-slate-700 text-right">
+                <button onclick="toggleLogModal()" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white text-sm rounded-lg transition">
+                    閉じる
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom Message Box -->
+    <div id="message-modal" class="fixed inset-0 bg-black/60 hidden flex items-center justify-center p-4 z-50">
+        <div class="bg-slate-800 border border-slate-700 rounded-2xl max-w-sm w-full p-6 text-center shadow-2xl space-y-4">
+            <h4 id="message-title" class="text-lg font-bold text-slate-200">通知</h4>
+            <p id="message-text" class="text-sm text-slate-300"></p>
+            <button onclick="closeMessage()" class="w-full py-2.5 bg-teal-600 hover:bg-teal-500 text-white font-semibold rounded-xl transition">
+                OK
+            </button>
+        </div>
+    </div>
+
+    <footer class="w-full text-center text-xs text-slate-500 mt-4">
+        Monolith Puzzle Web Version &bull; 11 rows × 22 cols
+    </footer>
+
+    <script>
+        // Constants and Configurations
+        const H = 11;
+        const W = 22;
+        const COLOR_CYCLE = [1, 2, 3, 4];
+        
+        // Color mapping for numbers: -1=empty(gray), 1=white, 2=pink, 3=yellow, 4=lightblue
+        const COLOR_STYLES = {
+            '-1': { bg: 'bg-slate-700 border-slate-600 text-slate-500', name: '空' },
+            '1':  { bg: 'bg-slate-100 hover:bg-white border-slate-300 text-slate-900 shadow-sm', name: '白' },
+            '2':  { bg: 'bg-pink-400 hover:bg-pink-300 border-pink-500 text-slate-900 shadow-sm', name: 'ピンク' },
+            '3':  { bg: 'bg-amber-300 hover:bg-amber-200 border-amber-400 text-slate-900 shadow-sm', name: '黄色' },
+            '4':  { bg: 'bg-sky-400 hover:bg-sky-300 border-sky-500 text-slate-900 shadow-sm', name: '水色' }
+        };
+
+        let initialBoard = [];
+        let currentBoard = [];
+        let history = [];
+        let log = [];
+
+        // Helper: Custom message box instead of alert()
+        function showMessage(title, text) {
+            document.getElementById('message-title').innerText = title;
+            document.getElementById('message-text').innerText = text;
+            document.getElementById('message-modal').classList.remove('hidden');
+        }
+
+        function closeMessage() {
+            document.getElementById('message-modal').classList.add('hidden');
+        }
+
+        // Generate random board
+        function generateRandomBoard() {
+            let board = [];
+            for (let y = 0; y < H; y++) {
+                let row = [];
+                for (let x = 0; x < W; x++) {
+                    row.push(Math.floor(Math.random() * 4) + 1);
+                }
+                board.push(row);
+            }
+            return board;
+        }
+
+        function startGameRandom() {
+            initialBoard = generateRandomBoard();
+            initGame(initialBoard);
+        }
+
+        function showCustomInput() {
+            const panel = document.getElementById('custom-input-panel');
+            panel.classList.toggle('hidden');
+            
+            // Populate example placeholder
+            if (!panel.classList.contains('hidden')) {
+                let sampleText = "";
+                for(let i=0; i<H; i++) {
+                    let line = "";
+                    for(let j=0; j<W; j++) {
+                        line += Math.floor(Math.random() * 4) + 1;
+                    }
+                    sampleText += line + (i < H - 1 ? "\n" : "");
+                }
+                document.getElementById('custom-board-text').value = sampleText;
+            }
+        }
+
+        function startGameCustom() {
+            const textVal = document.getElementById('custom-board-text').value.trim();
+            const lines = textVal.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+            const errDiv = document.getElementById('input-error');
+
+            if (lines.length !== H) {
+                errDiv.innerText = `エラー: ちょうど${H}行入力してください（現在 ${lines.length} 行）`;
+                errDiv.classList.remove('hidden');
+                return;
+            }
+
+            let newBoard = [];
+            for (let i = 0; i < H; i++) {
+                if (lines[i].length !== W) {
+                    errDiv.innerText = `エラー: ${i+1}行目が ${W} 文字ではありません（現在 ${lines[i].length} 文字）`;
+                    errDiv.classList.remove('hidden');
+                    return;
+                }
+                let row = [];
+                for (let j = 0; j < W; j++) {
+                    let char = lines[i][j];
+                    if (!['1','2','3','4'].includes(char)) {
+                        errDiv.innerText = `エラー: ${i+1}行目 ${j+1}文字目に 1〜4 以外の文字が含まれています (${char})`;
+                        errDiv.classList.remove('hidden');
+                        return;
+                    }
+                    row.push(parseInt(char));
+                }
+                newBoard.push(row);
+            }
+
+            errDiv.classList.add('hidden');
+            initialBoard = newBoard;
+            initGame(initialBoard);
+        }
+
+        function initGame(boardData) {
+            currentBoard = JSON.parse(JSON.stringify(boardData));
+            history = [];
+            log = [];
+            
+            document.getElementById('startup-screen').classList.add('hidden');
+            document.getElementById('game-screen').classList.remove('hidden');
+            renderBoard();
+        }
+
+        function returnToMenu() {
+            document.getElementById('game-screen').classList.add('hidden');
+            document.getElementById('startup-screen').classList.remove('hidden');
+        }
+
+        // Game Logic: Next color transformation (1->2->3->4->1, -1 stays -1)
+        function nextColor(c) {
+            if (c === -1) return -1;
+            let idx = COLOR_CYCLE.indexOf(c);
+            return COLOR_CYCLE[(idx + 1) % COLOR_CYCLE.length];
+        }
+
+        // Find connected group using BFS
+        function findGroup(board, sy, sx) {
+            let color = board[sy][sx];
+            if (color === -1) return [];
+
+            let visited = new Set();
+            let q = [[sy, sx]];
+            visited.add(`${sy},${sx}`);
+            let group = [];
+
+            while (q.length > 0) {
+                let [y, x] = q.shift();
+                group.push([y, x]);
+
+                const dirs = [[-1,0],[1,0],[0,-1],[0,1]];
+                for (let [dy, dx] of dirs) {
+                    let ny = y + dy;
+                    let nx = x + dx;
+                    if (ny >= 0 && ny < H && nx >= 0 && nx < W) {
+                        let key = `${ny},${nx}`;
+                        if (!visited.has(key) && board[ny][nx] === color) {
+                            visited.add(key);
+                            q.push([ny, nx]);
+                        }
+                    }
+                }
+            }
+            return group;
+        }
+
+        // Render board grid with row (A-K) and column (1-22) labels
+        function renderBoard() {
+            const container = document.getElementById('board-grid-container');
+            let html = '<table class="border-collapse">';
+
+            // Column Header Row
+            html += '<tr>';
+            html += '<th class="w-7 h-7 text-xs font-medium text-slate-500"></th>'; // Corner cell
+            for (let x = 0; x < W; x++) {
+                html += `<th class="w-7 h-7 text-xs font-semibold text-slate-400 text-center">${x + 1}</th>`;
+            }
+            html += '</tr>';
+
+            // Rows
+            const alphabets = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+            for (let y = 0; y < H; y++) {
+                html += '<tr>';
+                // Row Label
+                html += `<th class="w-7 h-7 text-xs font-semibold text-slate-400 text-center">${alphabets[y]}</th>`;
+                
+                for (let x = 0; x < W; x++) {
+                    let val = currentBoard[y][x];
+                    let styleObj = COLOR_STYLES[val] || COLOR_STYLES['-1'];
+                    html += `<td class="p-0.5">
+                        <button onclick="onCellClick(${y}, ${x})" id="cell-${y}-${x}" class="w-7 h-7 md:w-8 md:h-8 rounded border text-xs md:text-sm font-bold flex items-center justify-center ${styleObj.bg} cell-transition focus:outline-none">
+                            ${val === -1 ? '' : val}
+                        </button>
+                    </td>`;
+                }
+                html += '</tr>';
+            }
+            html += '</table>';
+            container.innerHTML = html;
+
+            // Update UI Counters & Undo button state
+            document.getElementById('move-counter').innerText = `手数: ${log.length}`;
+            document.getElementById('btn-undo').disabled = history.length === 0;
+        }
+
+        // Cell Click Handler
+        function onCellClick(y, x) {
+            let group = findGroup(currentBoard, y, x);
+            if (group.length < 2) return; // Need at least 2 connected cells to clear
+
+            // Highlight cells briefly before applying move
+            group.forEach(([gy, gx]) => {
+                let btn = document.getElementById(`cell-${gy}-${gx}`);
+                if (btn) {
+                    btn.classList.add('ring-4', 'ring-rose-500', 'scale-105', 'z-10');
+                }
+            });
+
+            setTimeout(() => {
+                applyMove(group);
+            }, 180);
+        }
+
+        // Apply Move & Update State
+        function applyMove(group) {
+            // Save state to history for Undo
+            history.push(JSON.parse(JSON.stringify(currentBoard)));
+            log.push(group);
+
+            let newBoard = JSON.parse(JSON.stringify(currentBoard));
+
+            // Clear cells (-1)
+            group.forEach(([y, x]) => {
+                newBoard[y][x] = -1;
+            });
+
+            // Find adjacent cells and change their colors
+            let adj = new Set();
+            group.forEach(([y, x]) => {
+                const dirs = [[-1,0],[1,0],[0,-1],[0,1]];
+                for (let [dy, dx] of dirs) {
+                    let ny = y + dy;
+                    let nx = x + dx;
+                    if (ny >= 0 && ny < H && nx >= 0 && nx < W) {
+                        if (newBoard[ny][nx] !== -1) {
+                            adj.add(`${ny},${nx}`);
+                        }
+                    }
+                }
+            });
+
+            adj.forEach(key => {
+                let [y, x] = key.split(',').map(Number);
+                newBoard[y][x] = nextColor(newBoard[y][x]);
+            });
+
+            currentBoard = newBoard;
+            renderBoard();
+        }
+
+        function undoMove() {
+            if (history.length > 0) {
+                currentBoard = history.pop();
+                log.pop();
+                renderBoard();
+            }
+        }
+
+        function resetBoard() {
+            currentBoard = JSON.parse(JSON.stringify(initialBoard));
+            history = [];
+            log = [];
+            renderBoard();
+        }
+
+        function toggleLogModal() {
+            const modal = document.getElementById('log-modal');
+            modal.classList.toggle('hidden');
+
+            if (!modal.classList.contains('hidden')) {
+                const content = document.getElementById('log-content');
+                if (log.length === 0) {
+                    content.innerHTML = '<p class="text-slate-500 text-center py-4">まだ消去履歴はありません。</p>';
+                } else {
+                    let html = '';
+                    const alphabets = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+                    log.forEach((entry, idx) => {
+                        let coordsStr = entry.map(([y, x]) => `${alphabets[y]}${x+1}`).join(', ');
+                        html += `<div class="p-2 bg-slate-900/60 rounded border border-slate-700/50">
+                            <span class="text-teal-400 font-bold">#${idx + 1}</span> (${entry.2 || entry.length}個消去): <span class="text-slate-400">${coordsStr}</span>
+                        </div>`;
+                    });
+                    content.innerHTML = html;
+                }
+            }
+        }
+    </script>
+</body>
+</html>
